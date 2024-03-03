@@ -3,10 +3,16 @@ import argparse
 import datetime
 import os
 import re
+print(os. getcwd())
+from keras.datasets import mnist
+
+# import tensorflow.keras as keras
+# import scikit learn kfold
 os.environ.setdefault("KERAS_BACKEND", "torch")  # Use PyTorch backend unless specified otherwise
 
 import keras
 import torch
+# import os, sys; sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 from mnist import MNIST
 
@@ -68,12 +74,21 @@ def main(args: argparse.Namespace) -> dict[str, float]:
     model.add(keras.Input([MNIST.H, MNIST.W, MNIST.C]))
     # TODO: Finish the model. Namely:
     # - start by adding a `keras.layers.Rescaling(1 / 255)` layer;
+    model.add(keras.layers.Rescaling(1 / 255))
     # - then add a `keras.layers.Flatten()` layer;
+    model.add(keras.layers.Flatten())
     # - add `args.hidden_layers` number of fully connected hidden layers
     #   `keras.layers.Dense()` with  `args.hidden_layer` neurons, using activation
     #   from `args.activation`, allowing "none", "relu", "tanh", "sigmoid";
+    for _ in range(args.hidden_layers):
+        if args.activation == "none":
+            model.add(keras.layers.Dense(args.hidden_layer))
+        else:
+            model.add(keras.layers.Dense(args.hidden_layer, activation=args.activation))
     # - finally, add an output fully connected layer with  `MNIST.LABELS` units
     #   and `softmax` activation.
+    model.add(keras.layers.Dense(MNIST.LABELS, activation='softmax'))
+
 
     model.compile(
         optimizer=keras.optimizers.Adam(),

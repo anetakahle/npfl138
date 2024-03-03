@@ -8,7 +8,7 @@ os.environ.setdefault("KERAS_BACKEND", "torch")  # Use PyTorch backend unless sp
 import keras
 import torch
 
-from mnist import MNIST
+from mnist_ import MNIST
 
 # Parse arguments
 parser = argparse.ArgumentParser()

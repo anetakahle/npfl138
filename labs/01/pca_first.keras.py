@@ -7,7 +7,7 @@ import keras
 import numpy as np
 import torch
 
-from mnist import MNIST
+from mnist_ import MNIST
 
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
