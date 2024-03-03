@@ -3,26 +3,24 @@ import argparse
 import datetime
 import os
 import re
-print(os. getcwd())
-from keras.datasets import mnist
-
-# import tensorflow.keras as keras
-# import scikit learn kfold
 os.environ.setdefault("KERAS_BACKEND", "torch")  # Use PyTorch backend unless specified otherwise
 
 import keras
+import numpy as np
 import torch
-# import os, sys; sys.path.append(os.path.dirname(os.path.realpath(__file__)))
 
 from mnist import MNIST
 
 parser = argparse.ArgumentParser()
 # These arguments will be set appropriately by ReCodEx, even if you change them.
-parser.add_argument("--activation", default="none", choices=["none", "relu", "tanh", "sigmoid"], help="Activation.")
 parser.add_argument("--batch_size", default=50, type=int, help="Batch size.")
+parser.add_argument("--decay", default=None, choices=["linear", "exponential", "cosine"], help="Decay type")
 parser.add_argument("--epochs", default=10, type=int, help="Number of epochs.")
-parser.add_argument("--hidden_layer", default=100, type=int, help="Size of the hidden layer.")
-parser.add_argument("--hidden_layers", default=1, type=int, help="Number of layers.")
+parser.add_argument("--hidden_layer", default=128, type=int, help="Size of the hidden layer.")
+parser.add_argument("--learning_rate", default=0.01, type=float, help="Initial learning rate.")
+parser.add_argument("--learning_rate_final", default=None, type=float, help="Final learning rate.")
+parser.add_argument("--momentum", default=None, type=float, help="Nesterov momentum to use in SGD.")
+parser.add_argument("--optimizer", default="SGD", choices=["SGD", "Adam"], help="Optimizer to use.")
 parser.add_argument("--recodex", default=False, action="store_true", help="Evaluation in ReCodEx.")
 parser.add_argument("--seed", default=42, type=int, help="Random seed.")
 parser.add_argument("--threads", default=1, type=int, help="Maximum number of threads to use.")
@@ -71,37 +69,56 @@ def main(args: argparse.Namespace) -> dict[str, float]:
     mnist = MNIST()
 
     # Create the model
-    model = keras.Sequential()
-    model.add(keras.Input([MNIST.H, MNIST.W, MNIST.C]))
-    # TODO: Finish the model. Namely:
-    # - start by adding a `keras.layers.Rescaling(1 / 255)` layer;
-    model.add(keras.layers.Rescaling(1 / 255))
-    # - then add a `keras.layers.Flatten()` layer;
-    model.add(keras.layers.Flatten())
-    # - add `args.hidden_layers` number of fully connected hidden layers
-    #   `keras.layers.Dense()` with  `args.hidden_layer` neurons, using activation
-    #   from `args.activation`, allowing "none", "relu", "tanh", "sigmoid";
-    for _ in range(args.hidden_layers):
-        if args.activation == "none":
-            model.add(keras.layers.Dense(args.hidden_layer))
-        else:
-            model.add(keras.layers.Dense(args.hidden_layer, activation=args.activation))
-    # - finally, add an output fully connected layer with  `MNIST.LABELS` units
-    #   and `softmax` activation.
-    model.add(keras.layers.Dense(MNIST.LABELS, activation='softmax'))
+    model = keras.Sequential([
+        keras.layers.Rescaling(1 / 255),
+        keras.layers.Flatten(),
+        keras.layers.Dense(args.hidden_layer, activation="relu"),
+        keras.layers.Dense(MNIST.LABELS, activation="softmax"),
+    ])
 
+    # TODO: Use the required `args.optimizer` (either `SGD` or `Adam`).
+    # - For `SGD`, if `args.momentum` is specified, use Nesterov momentum.
+    # - If `args.decay` is not specified, pass the given `args.learning_rate`
+    #   directly to the optimizer as a `learning_rate` argument.
+    # - If `args.decay` is set, then
+    #   - for `linear`, use `keras.optimizers.schedules.PolynomialDecay` with the
+    #     default `power=1.0`, and set `end_learning_rate` appropriately;
+    #     https://keras.io/api/optimizers/learning_rate_schedules/polynomial_decay/
+    #   - for `exponential`, use `keras.optimizers.schedules.ExponentialDecay`,
+    #     and set `decay_rate` appropriately (keep the default `staircase=False`);
+    #     https://keras.io/api/optimizers/learning_rate_schedules/exponential_decay/
+    #   - for `cosine`, use `keras.optimizers.schedules.CosineDecay`,
+    #     and set `alpha` appropriately;
+    #     https://keras.io/api/optimizers/learning_rate_schedules/cosine_decay/
+    #   - in all cases, you should reach the `args.learning_rate_final` just after the
+    #     training, i.e., the first update after the training should use exactly the
+    #     given `args.learning_rate_final`;
+    #   - in all cases, `decay_steps` must be **the total number of optimizer updates**,
+    #     i.e., the total number of training batches in all epochs. The size of
+    #     the training MNIST dataset is `mnist.train.size`, and you can assume it
+    #     is exactly divisible by `args.batch_size`.
+    #   Pass the created `{Polynomial,Exponential,Cosine}Decay` to the optimizer
+    #   using the `learning_rate` constructor argument.
+    #
+    #   If a learning rate schedule is used, TensorBoard automatically logs the last used learning
+    #   rate value in every epoch. Additionally, you can find out the last used learning
+    #   rate by printing `model.optimizer.learning_rate` (the original schedule is available
+    #   in `model.optimizer._learning_rate` if needed), so after training, the learning rate
+    #   should be `args.learning_rate_final`.
 
     model.compile(
-        optimizer=keras.optimizers.Adam(),
+        optimizer=...,
         loss=keras.losses.SparseCategoricalCrossentropy(),
         metrics=[keras.metrics.SparseCategoricalAccuracy("accuracy")],
     )
+
+    tb_callback = TorchTensorBoardCallback(args.logdir)
 
     logs = model.fit(
         mnist.train.data["images"], mnist.train.data["labels"],
         batch_size=args.batch_size, epochs=args.epochs,
         validation_data=(mnist.dev.data["images"], mnist.dev.data["labels"]),
-        callbacks=[TorchTensorBoardCallback(args.logdir)],
+        callbacks=[tb_callback],
     )
 
     # Return development metrics for ReCodEx to validate.
